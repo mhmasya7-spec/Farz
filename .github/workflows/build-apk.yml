@@ -1,0 +1,32 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        id: proj
+        run: |
+          mkdir -p app
+          unzip -o ./*.zip -d app
+          SPEC=$(find app -name buildozer.spec | head -1)
+          echo "dir=$(dirname "$SPEC")" >> "$GITHUB_OUTPUT"
+
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        with:
+          command: buildozer android debug
+          workdir: ${{ steps.proj.outputs.dir }}
+          buildozer_version: stable
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: plates-match-apk
+          path: ${{ steps.proj.outputs.dir }}/bin/*.apk
