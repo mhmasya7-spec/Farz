@@ -6,8 +6,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +26,13 @@ jobs:
             exit 1
           fi
           echo "dir=$(dirname "$SPEC")" >> "$GITHUB_OUTPUT"
+
+      - name: Pin python-for-android and NDK
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: |
+          sed -i '/^p4a.branch/d;/^android.ndk *=/d' buildozer.spec
+          sed -i '0,/^\[app\]/s//[app]\np4a.branch = v2024.01.21\nandroid.ndk = 25b/' buildozer.spec
+          head -6 buildozer.spec
 
       - uses: actions/setup-python@v5
         with:
@@ -48,16 +55,27 @@ jobs:
       - name: Build APK
         shell: bash
         working-directory: ${{ steps.proj.outputs.dir }}
-        run: buildozer -v android debug 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+        run: buildozer android debug 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
 
-      - name: Show real error
-        if: failure()
+      - name: Save error summary
+        if: always()
         shell: bash
         run: |
-          echo "===== أسطر الخطأ المهمة ====="
-          grep -n -E "Command failed|BUILD FAILED|Traceback|FAILURE|Exception|Error:|No matching|not found" "$GITHUB_WORKSPACE/build.log" | tail -25 || true
-          echo "===== آخر 40 سطر ====="
-          tail -n 40 "$GITHUB_WORKSPACE/build.log"
+          sed 's/\x1b\[[0-9;]*m//g' "$GITHUB_WORKSPACE/build.log" > "$GITHUB_WORKSPACE/clean.log" || true
+          grep -n -E " error: |Command failed|ERROR:|BUILD FAILED" "$GITHUB_WORKSPACE/clean.log" | grep -v "No matching distribution" | cut -c1-300 | tail -20 > "$GITHUB_WORKSPACE/error-tail.txt" || true
+          {
+            echo '### Errors'
+            echo '```'
+            cat "$GITHUB_WORKSPACE/error-tail.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload error summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-tail
+          path: error-tail.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
