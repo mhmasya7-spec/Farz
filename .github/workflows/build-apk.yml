@@ -11,12 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unzip project
+      - name: Find project
         id: proj
         run: |
-          mkdir -p app
-          unzip -o ./*.zip -d app
-          SPEC=$(find app -name buildozer.spec | head -1)
+          ZIP=$(find . -name "*.zip" -not -path "./.git/*" | head -1)
+          if [ -n "$ZIP" ]; then
+            mkdir -p app
+            unzip -o "$ZIP" -d app
+          fi
+          SPEC=$(find . -name buildozer.spec -not -path "./.git/*" | head -1)
+          if [ -z "$SPEC" ]; then
+            echo "لم أجد zip ولا buildozer.spec في المستودع. الملفات الموجودة:"
+            ls -R | head -60
+            exit 1
+          fi
           echo "dir=$(dirname "$SPEC")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
