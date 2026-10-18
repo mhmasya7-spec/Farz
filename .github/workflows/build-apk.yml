@@ -21,7 +21,7 @@ jobs:
           fi
           SPEC=$(find . -name buildozer.spec -not -path "./.git/*" | head -1)
           if [ -z "$SPEC" ]; then
-            echo "لم أجد zip ولا buildozer.spec في المستودع. الملفات الموجودة:"
+            echo "no buildozer.spec found"
             ls -R | head -60
             exit 1
           fi
@@ -46,8 +46,18 @@ jobs:
         run: pip install --upgrade buildozer "cython==0.29.36" setuptools virtualenv
 
       - name: Build APK
+        shell: bash
         working-directory: ${{ steps.proj.outputs.dir }}
-        run: buildozer -v android debug
+        run: buildozer -v android debug 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Show real error
+        if: failure()
+        shell: bash
+        run: |
+          echo "===== أسطر الخطأ المهمة ====="
+          grep -n -E "Command failed|BUILD FAILED|Traceback|FAILURE|Exception|Error:|No matching|not found" "$GITHUB_WORKSPACE/build.log" | tail -25 || true
+          echo "===== آخر 40 سطر ====="
+          tail -n 40 "$GITHUB_WORKSPACE/build.log"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
